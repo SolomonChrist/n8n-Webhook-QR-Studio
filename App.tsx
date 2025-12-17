@@ -1,10 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import Header from './components/Header';
 import CreateCard from './components/CreateCard';
 import PreviewCard from './components/PreviewCard';
 import HelpModal from './components/HelpModal';
 import { isValidUrl } from './utils/validation';
 import { REPO_URL, AUTHOR_URL, AUTHOR_NAME, APP_YEAR } from './utils/constants';
+import { CheckCircle2, AlertCircle, Info } from 'lucide-react';
 
 export type ValidationState = 'empty' | 'invalid' | 'valid';
 export type FramePreset = 'none' | 'A1' | 'A2' | 'A3' | 'A4' | 'A5' | 'A6' | 'A7' | 'A8';
@@ -19,6 +20,8 @@ export interface GeneratedData {
   captionText: string;
 }
 
+export type ToastType = 'success' | 'error' | 'info';
+
 const App: React.FC = () => {
   const [inputValue, setInputValue] = useState('');
   const [validationState, setValidationState] = useState<ValidationState>('empty');
@@ -32,6 +35,14 @@ const App: React.FC = () => {
 
   // Modal State
   const [isHelpOpen, setIsHelpOpen] = useState(false);
+
+  // Toast State
+  const [toast, setToast] = useState<{ message: string, type: ToastType } | null>(null);
+
+  const showToast = useCallback((message: string, type: ToastType = 'success') => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 3000);
+  }, []);
 
   // Debounced validation
   useEffect(() => {
@@ -58,6 +69,7 @@ const App: React.FC = () => {
         cornerStyle,
         captionText
       });
+      showToast('QR Code Generated');
     }
   };
 
@@ -107,6 +119,7 @@ const App: React.FC = () => {
             <PreviewCard 
               validationState={validationState}
               generatedData={generatedData}
+              showToast={showToast}
             />
           </div>
         </div>
@@ -144,6 +157,22 @@ const App: React.FC = () => {
 
         {/* Modals */}
         <HelpModal isOpen={isHelpOpen} onClose={() => setIsHelpOpen(false)} />
+
+        {/* Global Toast */}
+        {toast && (
+          <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-[100] animate-in slide-in-from-bottom-4 fade-in duration-300">
+            <div className={`px-5 py-3 rounded-2xl shadow-2xl flex items-center gap-3 border ${
+              toast.type === 'success' ? 'bg-white border-green-100 text-green-700' :
+              toast.type === 'error' ? 'bg-white border-red-100 text-red-700' :
+              'bg-white border-blue-100 text-blue-700'
+            }`}>
+              {toast.type === 'success' && <CheckCircle2 size={18} />}
+              {toast.type === 'error' && <AlertCircle size={18} />}
+              {toast.type === 'info' && <Info size={18} />}
+              <span className="text-sm font-bold tracking-tight">{toast.message}</span>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

@@ -25,13 +25,13 @@ const QRCodeFrame: React.FC<QRCodeFrameProps> = ({ preset, color, cornerStyle, c
     return base;
   };
 
-  if (preset === 'none') {
-    return <div className="bg-white p-5 rounded-2xl shadow-lg border border-slate-100">{children}</div>;
-  }
-
-  const renderFrame = () => {
+  const renderFrameContent = () => {
     const commonRadius = getRadius(24);
     const commonBorder = getBorderWidth(3);
+
+    if (preset === 'none') {
+      return <div className="bg-white p-5 rounded-2xl shadow-lg border border-slate-100">{children}</div>;
+    }
 
     switch (preset) {
       case 'A1': 
@@ -101,7 +101,6 @@ const QRCodeFrame: React.FC<QRCodeFrameProps> = ({ preset, color, cornerStyle, c
         );
 
       case 'A5': // Corner brackets
-        const bracketSize = cornerStyle === 'bold' ? 10 : 8;
         return (
           <div className="bg-white p-8 relative flex flex-col items-center gap-6 shadow-lg border border-slate-100 rounded-xl transition-all duration-300">
              <div className="absolute top-3 left-3 w-8 h-8 border-t-4 border-l-4 border-solid transition-all" style={{ borderColor: primaryColor, borderRadius: cornerStyle === 'rounded' ? '8px' : '2px', borderWidth: getBorderWidth(4) }}></div>
@@ -167,8 +166,8 @@ const QRCodeFrame: React.FC<QRCodeFrameProps> = ({ preset, color, cornerStyle, c
   };
 
   return (
-    <div id="qr-export-container" className="inline-block transition-all duration-300">
-      {renderFrame()}
+    <div id="qr-export-container" className="inline-block transition-all duration-300 bg-white">
+      {renderFrameContent()}
     </div>
   );
 };

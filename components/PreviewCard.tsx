@@ -1,19 +1,79 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { QRCodeCanvas, QRCodeSVG } from 'qrcode.react';
-import { QrCode, Sparkles, FileImage, FileCode, FileText } from 'lucide-react';
-import { downloadPng, downloadSvg, downloadPdf } from '../utils/download';
+import { 
+  QrCode, Sparkles, FileImage, FileCode, FileText, 
+  Link, Share2, Save, X, Download
+} from 'lucide-react';
+import { downloadPng, downloadSvg, downloadPdf, getQrBlob, getFilename } from '../utils/download';
 import { getHostname } from '../utils/validation';
-import { ValidationState, GeneratedData } from '../App';
+import { ValidationState, GeneratedData, ToastType } from '../App';
 import QRCodeFrame from './QRCodeFrame';
 
 interface PreviewCardProps {
   validationState: ValidationState;
   generatedData: GeneratedData | null;
+  showToast: (message: string, type?: ToastType) => void;
 }
 
-const PreviewCard: React.FC<PreviewCardProps> = ({ validationState, generatedData }) => {
+const PreviewCard: React.FC<PreviewCardProps> = ({ validationState, generatedData, showToast }) => {
+  const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const hostname = generatedData ? getHostname(generatedData.url) : '';
   const dateString = generatedData ? new Date(generatedData.timestamp).toLocaleDateString() : '';
+
+  const handleCopyLink = async () => {
+    if (!generatedData) return;
+    try {
+      await navigator.clipboard.writeText(generatedData.url);
+      showToast('Link copied');
+    } catch (err) {
+      showToast('Copy failed, try manually', 'error');
+    }
+  };
+
+  const handleShare = async () => {
+    if (!generatedData) return;
+    
+    try {
+      if (navigator.share) {
+        const blob = await getQrBlob();
+        if (!blob) throw new Error('Blob generation failed');
+        
+        const filename = getFilename(generatedData.url, 'png');
+        const file = new File([blob], filename, { type: 'image/png' });
+
+        const shareData: ShareData = {
+          title: 'Webhook QR',
+          text: 'Scan to trigger automation',
+          url: generatedData.url
+        };
+
+        if (navigator.canShare && navigator.canShare({ files: [file] })) {
+          await navigator.share({ ...shareData, files: [file] });
+        } else {
+          await navigator.share(shareData);
+        }
+        showToast('Share opened');
+      } else {
+        setIsShareModalOpen(true);
+      }
+    } catch (err) {
+      if ((err as Error).name !== 'AbortError') {
+        setIsShareModalOpen(true);
+      }
+    }
+  };
+
+  const handleSaveImage = async () => {
+    if (!generatedData) return;
+    await downloadPng(generatedData.url);
+    
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream;
+    if (isIOS) {
+      showToast('Tip: Open image, then use Save Image', 'info');
+    } else {
+      showToast('Saved to device');
+    }
+  };
 
   return (
     <div className="bg-white rounded-[18px] border border-[#E3E8F2] shadow-premium card-highlight p-8 flex flex-col h-full relative overflow-hidden transition-all duration-300">
@@ -90,37 +150,102 @@ const PreviewCard: React.FC<PreviewCardProps> = ({ validationState, generatedDat
         )}
       </div>
 
-      <div className="mt-auto">
-        <h3 className="text-[#0F172A] text-[11px] font-bold uppercase tracking-widest mb-3 pl-1">Download Format</h3>
-        <div className="grid grid-cols-3 gap-2">
-          <button
-            onClick={() => generatedData && downloadPng(generatedData.url)}
-            disabled={!generatedData}
-            className="flex items-center justify-center gap-1.5 border border-[#E3E8F2] text-[#334155] bg-white hover:bg-[#F8FAFC] disabled:opacity-50 font-bold h-[38px] rounded-xl transition-all text-[12px] group"
-          >
-            <FileImage size={14} className="text-[#94A3B8] group-hover:text-[#2563EB] transition-colors" />
-            PNG
-          </button>
-          
-          <button
-            onClick={() => generatedData && downloadSvg(generatedData.url)}
-            disabled={!generatedData}
-            className="flex items-center justify-center gap-1.5 border border-[#E3E8F2] text-[#334155] bg-white hover:bg-[#F8FAFC] disabled:opacity-50 font-bold h-[38px] rounded-xl transition-all text-[12px] group"
-          >
-            <FileCode size={14} className="text-[#94A3B8] group-hover:text-[#2563EB] transition-colors" />
-            SVG
-          </button>
-          
-          <button
-            onClick={() => generatedData && downloadPdf(generatedData.url, generatedData.timestamp)}
-            disabled={!generatedData}
-            className="flex items-center justify-center gap-1.5 border border-[#E3E8F2] text-[#334155] bg-white hover:bg-[#F8FAFC] disabled:opacity-50 font-bold h-[38px] rounded-xl transition-all text-[12px] group"
-          >
-            <FileText size={14} className="text-[#94A3B8] group-hover:text-[#2563EB] transition-colors" />
-            PDF
-          </button>
+      <div className="mt-auto space-y-6">
+        <div>
+          <h3 className="text-[#0F172A] text-[11px] font-bold uppercase tracking-widest mb-3 pl-1">Download Format</h3>
+          <div className="grid grid-cols-3 gap-2">
+            <button
+              onClick={() => generatedData && downloadPng(generatedData.url)}
+              disabled={!generatedData}
+              className="flex items-center justify-center gap-1.5 border border-[#E3E8F2] text-[#334155] bg-white hover:bg-[#F8FAFC] disabled:opacity-50 font-bold h-[38px] rounded-xl transition-all text-[12px] group"
+            >
+              <FileImage size={14} className="text-[#94A3B8] group-hover:text-[#2563EB] transition-colors" />
+              PNG
+            </button>
+            <button
+              onClick={() => generatedData && downloadSvg(generatedData.url)}
+              disabled={!generatedData}
+              className="flex items-center justify-center gap-1.5 border border-[#E3E8F2] text-[#334155] bg-white hover:bg-[#F8FAFC] disabled:opacity-50 font-bold h-[38px] rounded-xl transition-all text-[12px] group"
+            >
+              <FileCode size={14} className="text-[#94A3B8] group-hover:text-[#2563EB] transition-colors" />
+              SVG
+            </button>
+            <button
+              onClick={() => generatedData && downloadPdf(generatedData.url, generatedData.timestamp)}
+              disabled={!generatedData}
+              className="flex items-center justify-center gap-1.5 border border-[#E3E8F2] text-[#334155] bg-white hover:bg-[#F8FAFC] disabled:opacity-50 font-bold h-[38px] rounded-xl transition-all text-[12px] group"
+            >
+              <FileText size={14} className="text-[#94A3B8] group-hover:text-[#2563EB] transition-colors" />
+              PDF
+            </button>
+          </div>
+        </div>
+
+        <div>
+          <h3 className="text-[#0F172A] text-[11px] font-bold uppercase tracking-widest mb-3 pl-1">Share</h3>
+          <div className="flex flex-wrap gap-2">
+            <button
+              onClick={handleCopyLink}
+              disabled={!generatedData}
+              className="flex-1 flex items-center justify-center gap-1.5 border border-[#E3E8F2] text-[#475569] bg-white hover:bg-blue-50/50 hover:border-[#2563EB]/30 hover:text-[#2563EB] disabled:opacity-50 font-bold h-[38px] rounded-xl transition-all text-[11px] px-3 whitespace-nowrap"
+            >
+              <Link size={13} />
+              Copy Link
+            </button>
+            <button
+              onClick={handleShare}
+              disabled={!generatedData}
+              className="flex-1 flex items-center justify-center gap-1.5 border border-[#E3E8F2] text-[#475569] bg-white hover:bg-blue-50/50 hover:border-[#2563EB]/30 hover:text-[#2563EB] disabled:opacity-50 font-bold h-[38px] rounded-xl transition-all text-[11px] px-3 whitespace-nowrap"
+            >
+              <Share2 size={13} />
+              Share
+            </button>
+            <button
+              onClick={handleSaveImage}
+              disabled={!generatedData}
+              className="flex-1 flex items-center justify-center gap-1.5 border border-[#E3E8F2] text-[#475569] bg-white hover:bg-blue-50/50 hover:border-[#2563EB]/30 hover:text-[#2563EB] disabled:opacity-50 font-bold h-[38px] rounded-xl transition-all text-[11px] px-3 whitespace-nowrap"
+            >
+              <Save size={13} />
+              Save Image
+            </button>
+          </div>
         </div>
       </div>
+
+      {/* Share Fallback Modal */}
+      {isShareModalOpen && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-[#0F172A]/40 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white rounded-[24px] w-full max-w-[400px] shadow-2xl p-6 border border-[#E3E8F2] animate-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-[#0F172A] text-lg font-bold tracking-tight">Share options</h3>
+              <button onClick={() => setIsShareModalOpen(false)} className="p-2 text-[#94A3B8] hover:text-[#0F172A] hover:bg-[#F1F5FB] rounded-xl transition-colors">
+                <X size={20} />
+              </button>
+            </div>
+            <div className="space-y-3">
+              <button
+                onClick={() => { handleCopyLink(); setIsShareModalOpen(false); }}
+                className="w-full flex items-center gap-3 px-4 py-3 rounded-xl border border-[#E3E8F2] text-[#475569] font-semibold hover:bg-[#F8FAFC] transition-all text-sm"
+              >
+                <Link size={18} />
+                Copy Webhook Link
+              </button>
+              <button
+                onClick={() => { handleSaveImage(); setIsShareModalOpen(false); }}
+                className="w-full flex items-center gap-3 px-4 py-3 rounded-xl border border-[#E3E8F2] text-[#475569] font-semibold hover:bg-[#F8FAFC] transition-all text-sm"
+              >
+                <Download size={18} />
+                Download PNG
+              </button>
+              <div className="p-4 bg-blue-50 rounded-xl border border-blue-100 mt-4">
+                <p className="text-[12px] text-blue-700 font-medium leading-relaxed">
+                  Tip: On mobile devices, download the image first then share it from your gallery or files.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

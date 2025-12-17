@@ -2,26 +2,40 @@ import { getHostname } from './validation';
 import { jsPDF } from 'jspdf';
 import * as htmlToImage from 'html-to-image';
 
-const getFilename = (url: string, ext: string) => {
+export const getFilename = (url: string, ext: string) => {
   const hostname = getHostname(url);
   const date = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
   return `webhook-qr_${hostname}_${date}.${ext}`;
 };
 
-export const downloadPng = async (url: string) => {
+export const getQrBlob = async (): Promise<Blob | null> => {
   const container = document.getElementById('qr-export-container');
   if (!container) {
-    console.error("Export container not found");
-    return;
+    console.error("Export container 'qr-export-container' not found in DOM.");
+    return null;
   }
 
   try {
-    const filename = getFilename(url, 'png');
-    // Using a higher pixel ratio for crispness
-    const dataUrl = await htmlToImage.toPng(container, {
-      pixelRatio: 4,
-      backgroundColor: '#ffffff'
+    // We use toBlob directly from the imported module
+    const blob = await htmlToImage.toBlob(container, {
+      pixelRatio: 3, // 3 is usually enough for high-quality without hitting browser canvas limits
+      backgroundColor: '#ffffff',
+      cacheBust: true,
     });
+    return blob;
+  } catch (error) {
+    console.error('Error generating blob with html-to-image:', error);
+    return null;
+  }
+};
+
+export const downloadPng = async (url: string) => {
+  const blob = await getQrBlob();
+  if (!blob) return;
+
+  try {
+    const filename = getFilename(url, 'png');
+    const dataUrl = URL.createObjectURL(blob);
     
     const downloadLink = document.createElement("a");
     downloadLink.href = dataUrl;
@@ -29,60 +43,51 @@ export const downloadPng = async (url: string) => {
     document.body.appendChild(downloadLink);
     downloadLink.click();
     document.body.removeChild(downloadLink);
+    URL.revokeObjectURL(dataUrl);
   } catch (error) {
-    console.error('Error generating PNG:', error);
+    console.error('Error downloading PNG:', error);
   }
 };
 
 export const downloadSvg = (url: string) => {
-  const container = document.getElementById('qr-export-container');
   const svgElement = document.getElementById('qr-code-svg');
-  if (!container || !svgElement) {
-    console.error("Required elements not found");
+  if (!svgElement) {
+    console.error("SVG element 'qr-code-svg' not found in DOM.");
     return;
   }
 
-  const filename = getFilename(url, 'svg');
-  
-  // Assemble SVG: Since complex frames use CSS, for SVG we export a simple vector 
-  // that preserves scanability. A true vector export of complex CSS frames 
-  // requires manual mapping to SVG elements or using a tool that converts DOM to SVG.
-  // To keep it deterministic and clean as requested, we'll export the QR as a pure vector.
-  const serializer = new XMLSerializer();
-  let source = serializer.serializeToString(svgElement);
+  try {
+    const filename = getFilename(url, 'svg');
+    const serializer = new XMLSerializer();
+    let source = serializer.serializeToString(svgElement);
 
-  if(!source.match(/^<svg[^>]+xmlns="http\:\/\/www\.w3\.org\/2000\/svg"/)){
-    source = source.replace(/^<svg/, '<svg xmlns="http://www.w3.org/2000/svg"');
+    if(!source.match(/^<svg[^>]+xmlns="http\:\/\/www\.w3\.org\/2000\/svg"/)){
+      source = source.replace(/^<svg/, '<svg xmlns="http://www.w3.org/2000/svg"');
+    }
+    
+    source = '<?xml version="1.0" standalone="no"?>\r\n' + source;
+    const urlBlob = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(source);
+
+    const downloadLink = document.createElement("a");
+    downloadLink.href = urlBlob;
+    downloadLink.download = filename;
+    document.body.appendChild(downloadLink);
+    downloadLink.click();
+    document.body.removeChild(downloadLink);
+  } catch (error) {
+    console.error('Error downloading SVG:', error);
   }
-  
-  source = '<?xml version="1.0" standalone="no"?>\r\n' + source;
-  const urlBlob = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(source);
-
-  const downloadLink = document.createElement("a");
-  downloadLink.href = urlBlob;
-  downloadLink.download = filename;
-  document.body.appendChild(downloadLink);
-  downloadLink.click();
-  document.body.removeChild(downloadLink);
 };
 
 export const downloadPdf = async (url: string, timestamp: string) => {
-  const container = document.getElementById('qr-export-container');
-  if (!container) {
-    console.error("Export container not found");
-    return;
-  }
+  const blob = await getQrBlob();
+  if (!blob) return;
 
   try {
     const filename = getFilename(url, 'pdf');
     const hostname = getHostname(url);
     const dateString = new Date(timestamp).toLocaleString();
-
-    // Use high-res capture for PDF embedding
-    const dataUrl = await htmlToImage.toPng(container, {
-      pixelRatio: 4,
-      backgroundColor: '#ffffff'
-    });
+    const dataUrl = URL.createObjectURL(blob);
 
     const doc = new jsPDF({
       orientation: 'portrait',
@@ -93,14 +98,14 @@ export const downloadPdf = async (url: string, timestamp: string) => {
     const pageWidth = doc.internal.pageSize.getWidth();
     const pageHeight = doc.internal.pageSize.getHeight();
     
-    // Determine image aspect ratio to fit properly
     const img = new Image();
     img.src = dataUrl;
-    await new Promise(resolve => img.onload = resolve);
+    await new Promise((resolve, reject) => {
+      img.onload = resolve;
+      img.onerror = reject;
+    });
     
     const aspectRatio = img.width / img.height;
-    
-    // Target width: ~5.5 inches
     const targetWidth = 5.5;
     const targetHeight = targetWidth / aspectRatio;
     
@@ -109,7 +114,6 @@ export const downloadPdf = async (url: string, timestamp: string) => {
 
     doc.addImage(dataUrl, 'PNG', qrX, qrY, targetWidth, targetHeight);
 
-    // Caption
     doc.setFontSize(10);
     doc.setTextColor(148, 163, 184); // #94A3B8
     
@@ -118,6 +122,7 @@ export const downloadPdf = async (url: string, timestamp: string) => {
     doc.text(`Generated at ${dateString}`, pageWidth / 2, textY + 0.2, { align: 'center' });
 
     doc.save(filename);
+    URL.revokeObjectURL(dataUrl);
   } catch (error) {
     console.error('Error generating PDF:', error);
   }

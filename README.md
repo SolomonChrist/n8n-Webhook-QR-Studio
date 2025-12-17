@@ -12,6 +12,10 @@ A minimal, production-clean web app to generate scannable, brandable QR codes fr
   - **Advanced Color Control**: Full hex manual entry + native color picker for frames.
   - **Corner Styles**: Toggle between **Classic**, **Rounded**, and **Bold** frame corners.
   - **Custom Captions**: Add up to 40 characters of text to your QR code frame.
+- **Sharing & Distribution**:
+  - **Copy Link**: Quickly copy the raw webhook URL to clipboard.
+  - **Web Share**: Native sharing support for mobile devices (share image + link).
+  - **Save Image**: Mobile-optimized one-click PNG export with iOS-specific guidance.
 - **Export Options**: 
   - **PNG**: High-resolution framed raster for digital use.
   - **SVG**: Pure vector QR code for professional design scaling.
