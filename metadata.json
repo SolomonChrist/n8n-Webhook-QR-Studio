@@ -1,0 +1,5 @@
+{
+  "name": "n8n Webhook QR Studio",
+  "description": "A minimal, clean utility to generate scannable QR codes from n8n webhook URLs.",
+  "requestFramePermissions": []
+}
